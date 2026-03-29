@@ -4,12 +4,59 @@
 ## load the 8 separate single channel MS images, stack them into a single [8, H, W] tensor
 ## returns the paired (RGB, MSI) tensors
 
-from torch.utils.data import Dataset, Dataloader
+from torch.utils.data import Dataset, DataLoader
 import os
+from PIL import Image
+import torch
+import torchvision.transforms.functional as tf
 
 class MSIDataset(Dataset):
-    def __init_(self, images_dir, masks_dir, transform=None):
+    def __init__(self, images_dir, masks_dir, transform=None):
         self.images_dir = images_dir
         self.masks_dir = masks_dir
         self.transform = transform
-        self.images = [f for f in sorted(os.listdir(images_dir)) if f.endswith('.bmp') or f.endswith('.jpg') or f.endswith('.png') or f.endswith('.JPG')]
+        
+        # Get all RGB image files
+        self.images = [f for f in sorted(os.listdir(images_dir)) 
+                      if f.endswith(('.bmp', '.jpg', '.png', '.JPG'))]
+        
+        # Get the corresponding 8 MSI files for each RGB image
+        self.msi_files = {}
+        for img_name in self.images:
+            base_name = img_name.split('_RGB')[0]
+            msi_images = sorted([f for f in os.listdir(masks_dir) 
+                                if f.startswith(base_name) and f != img_name])
+            self.msi_files[img_name] = msi_images
+        
+    def __len__(self):
+        return len(self.images)
+    
+    def __getitem__(self, index):
+        img_name = self.images[index]
+        
+        # Load RGB image
+        rgb_path = os.path.join(self.images_dir, img_name)
+        rgb_image = Image.open(rgb_path).convert('RGB')
+        
+        # Convert to tensor [3, H, W]
+        rgb_tensor = tf.to_tensor(rgb_image)
+        
+        # Load 8 multispectral images
+        msi_names = self.msi_files[img_name]
+        msi_tensors = []
+        
+        for msi_name in msi_names:
+            msi_path = os.path.join(self.masks_dir, msi_name)
+            msi_image = Image.open(msi_path).convert('L')  # Grayscale (single channel)
+            msi_tensor = tf.to_tensor(msi_image)  # Shape: [1, H, W]
+            msi_tensors.append(msi_tensor)
+        
+        # Stack the 8 channels into [8, H, W]
+        msi_tensor = torch.cat(msi_tensors, dim=0)
+        
+        # Apply transforms if provided
+        if self.transform:
+            rgb_tensor = self.transform(rgb_tensor)
+            msi_tensor = self.transform(msi_tensor)
+        
+        return rgb_tensor, msi_tensor
