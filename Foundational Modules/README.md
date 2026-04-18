@@ -23,3 +23,6 @@ Successfully returns the RGB and MSI tensor pairs !!!
 ## pseudo_siamese_heads.py
 - This script defines the very first layers of the model (the unshared input heads)
 - It will take tensors of depth 3 and 8 as input pass them through the conv2d layers and project them into a shared embedding space
+
+![input and output shapes](img/input_output_shapes.png)
+- The above output shows that both modalities are aligned and ready for the Swin transformer blocks.
